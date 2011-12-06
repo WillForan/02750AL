@@ -5,6 +5,7 @@ function initial
     load 'genes.mat';
     validationFolds=5;
     numTrees=50;
+    BatchSize=100;
     path(path,'randomforest-matlab-read-only/RF_Class_C/');
 
     %genes = 
@@ -16,15 +17,129 @@ function initial
     c = cvpartition(genes.labels,'k',validationFolds);
     r=struct;
 
+    %accuracy for each fold and each interval step
+    maxIterations  = ceil(max(c.TrainSize)/BatchSize);
+    stats.accuracy = zeros(c.NumTestSets, maxIterations );
+    numInstStart   = floor(min(c.TrainSize)/10); %always start with 10% of the smallest training set
+
     %for each fold
     for f=1:c.NumTestSets
+	
+	fprintf('[*][*] %i/%i\n',f,c.NumTestSets);
+
+	%%%%%%%%%%%%%%%%%%
+	% ACTIVE LEARNING
+	%%%%%%%%%%%%%%%%%%
+
+	%%%
+	%random initial (10%)
+	%%
+	avalableIdx  = find(c.training(f)==1)';			%all in the training set are avalable to be introduced to AL traning
+	removeIdxIdx = randsample( length(avalableIdx), ...
+			        numInstStart);			%pick 10% to remove (move from avalable to AL train)
+	trainIdx     = avalableIdx(removeIdxIdx); 		%add the indexes to trainIdx
+	avalableIdx(removeIdxIdx)=[]; 				%remove avalability
+
+	%%%%%%
+	% start AL iterations
+	%%%%%%
+	i=1;
+	trainRF(f,i); 
+
+	%%%% contine until there are no points left
+	while(length(avalableIdx)>0)
+	    i=i+1;
+	    updateTrainIdxRND;
+	    trainRF(f,i);
+	end
+    end
+
+
+    TP = sum(stats.random.TP ) ./ c.NumTestSets;
+    TN = sum(stats.random.TN ) ./ c.NumTestSets;
+    FP = sum(stats.random.FP ) ./ c.NumTestSets;
+    FN = sum(stats.random.FN ) ./ c.NumTestSets;
+
+    fig=figure;
+    %plot ([1:maxIterations] .* BatchSize,sum(stats.random.accuracy) ./ c.NumTestSets);
+    plot (...
+          [ numInstStart:BatchSize:BatchSize*length(stats.random.TP)+BatchSize], ...
+          [(TP+TN) ./ (TP+TN+FP+FN); TP./(TP+FN); TP./(TN+FP); FP./(FP+TN)  ]...
+	 );
+    legend({'Accuracy','Sensitivity','Specificity','FDR'});
+    title(['Random Forest - Random selection - Batch ' num2str(BatchSize)]);
+    xlabel('Instances Seen'); ylabel(''); 
+    hgexport(fig,'img/random')
+
+
+    %names=fieldnames(r);
+    %for n=1:length(names)
+    %    fprintf('\t%s\t%2.2f\n', ...
+    %        names{n},            ...
+    %        sum(getfield(r,names{n}))/c.NumTestSets);
+    %end
+
+
+end
+
+function trainRF(f,i)
+    globals;
+
+    %train on selected features
+    clear model;
+    model = classRF_train( genes.feats(trainIdx,:), genes.labels(trainIdx,:),numTrees );
+
+    %get total results
+    results=zeros(1,c.TestSize(f));
+    votes=zeros(2,c.TestSize(f));
+    [results,votes] = classRF_predict(genes.feats(c.test(f)),model);
+
+
+    %%%%%%%%%
+    %for tree
+    %%%%%%%%%
+
+    posIdx = find(genes.labels(c.test(f)) == 1);
+    negIdx = find(genes.labels(c.test(f)) == 0);
+    stats.random.TP(f,i) = length(  find( results(posIdx) ==1 )  );
+    stats.random.TN(f,i) = length(  find( results(negIdx) ==0 )  );
+    stats.random.FP(f,i) = length(  find( results(negIdx) ==1 )  );
+    stats.random.FN(f,i) = length(  find( results(posIdx) ==0 )  );
+
+    fprintf('[*] %i - %i\n', i, length(trainIdx));
+    %votediff = [genes.labels(c.test(f)) - results, votes(:,1) - votes(:,2)];
+    %trues         = votediff(find(votediff(:,1)==0),:);
+    %stats.random.accuracy(f,i)=length(trues)/c.TestSize(f);
+    %fprintf('[*] %i - %i\t%.3f\n', i, length(trainIdx),stats.random.accuracy(f,i));
+end
+
+function updateTrainIdxRND
+    globals;
+    remain = length(avalableIdx);
+    batch  = BatchSize;
+    if(remain < batch); batch=remain; end; 
+
+    removeIdxIdx = randsample( length(avalableIdx), batch );
+    trainIdx=[trainIdx avalableIdx(removeIdxIdx)];
+    avalableIdx(removeIdxIdx) = [];
+end
+
+function updateTrainIdxVOTES
+    globals;
+    %set batch
+    remain = length(avalableIdx);
+    batch  = BatchSize;
+    if(remain < batch); batch=remain; end; 
+
+    removeIdxIdx = randsample( length(avalableIdx), batch );
+    trainIdx=[trainIdx avalableIdx(removeIdxIdx)];
+    avalableIdx(removeIdxIdx) = [];
+end
+
+function treeJunk
+	%%%%%%%%%%%%%%%%%%
 	RF               = classRF_train(genes.feats(c.training(f),:),genes.labels(c.training(f)),numTrees);
 	[results, votes] = classRF_predict(genes.feats(c.test(f)),RF);
-
-	%%%%%%%%%%%%%%%%%%
-
-
-	%%%%%%%%%%%%%%%%%%
 
 	%positive index of labels in test
         posIdx = find(genes.labels(c.test(f)) == 1);
@@ -56,87 +171,4 @@ function initial
 	trues         = votediff(find(votediff(:,1)==0),:);
 	r.TPdiff(f)   = sum( trues( find( trues(:,2) > 0 ),2)) / r.TP(f);
 	r.TNdiff(f)   = sum( trues( find( trues(:,2) < 0 ),2)) / r.TN(f);
-
-    end
-
-    names=fieldnames(r);
-    for n=1:length(names)
-	fprintf('\t%s\t%2.2f\n', ...
-	    names{n},           ...
-	    sum(getfield(r,names{n}))/c.NumTestSets);
-    end
-
-
-    %err = zeros(CVO.NumTestSets,1);
-    %for i = 1:CVO.NumTestSets
-    %    trIdx = CVO.training(i);
-    %    teIdx = CVO.test(i);
-    %    ytest = classify(meas(teIdx,:),meas(trIdx,:),...
-    %    species(trIdx,:));
-    %    err(i) = sum(~strcmp(ytest,species(teIdx)));
-    %end
-    %cvErr = sum(err)/sum(CVO.TestSize)
-    return
-
-    %%%
-    %random initial (10%)
-    %%
-    avalableIdx = [1:length(genes.feats)];
-    trainIdx    = randsample( avalableIdx, floor(length(avalableIdx)/10) );
-    avalableIdx(trainIdx) = [];
-
-    %uses trainIdx and avalableIdx
-    i=1;
-    randtrain(i)
-
-    %%%% random
-    batch=100;
-    while(avalableIdx(1))
-	remain      = length(avalableIdx);
-	if(remain < batch); batch=remain; end; 
-
-	removeIdxIdx = randsample( length(avalableIdx), batch );
-	trainIdx=[trainIdx avalableIdx(removeIdxIdx)];
-	avalableIdx(removeIdxIdx) = [];
-
-
-	%length(unique(trainIdx)) == length(trainIdx)
-
-
-	i=i+1;
-	randtrain(i);
-    end
 end
-
-function randtrain(i)
-    globals;
-    %train on random
-    svm = svmtrain( genes.feats(trainIdx,:), genes.labels(trainIdx,:) );
-
-    %get total results
-    results = svmclassify(svm,genes.feats);
-
-    %stats
-    TP = length( find( results( find(genes.labels == 1) ) ==1) );
-    TN = length( find( results( find(genes.labels == 0) ) ==0) );
-    FP = length( find( results( find(genes.labels == 0) ) ==1) );
-    FN = length( find( results( find(genes.labels == 1) ) ==0) );
-
-
-    %%%%%%%%%
-    %for tree
-    %%%%%%%%%
-    votediff = [genes.labels(c.test(f)) - results, votes(:,1) - votes(:,2)];
-    %the avg of how many more votes went positive for correctly classified
-    FNdiff  = sum( votediff(find(votediff(:,1)==1),2) )/FN;
-    FPdiff  = sum( votediff(find(votediff(:,1)==-1),2) )/FP;
-    %first is 0 (no diff==match), second is which side of 0
-    TPdiff(f)   = sum( votediff(find( votediff(find(votediff(:,1)==0),2) > 0 ),2) )/TP;
-    TNdiff(f)   = sum( votediff(find( votediff(find(votediff(:,1)==0),2) < 0 ),2) )/TN;
-    %%%%%%%%%
-
-    correct(i)=(TP+TN)/length(genes.labels)*100;
-    fprintf('[*] %i - %i (%i)\n', i, length(trainIdx), length(unique(trainIdx)));
-    fprintf('\tTP\tTN\t\tFP\tFN\tcorrect\n\t%i\t%i\t\t%i\t%i\t%2.1f\n\n', TP,TN,FP,FN,correct(i));
-end
-
