@@ -3,8 +3,8 @@ function initial
     globals;
 
     load 'genes.mat';
-    validationFolds=3;
-    numTrees=100;
+    validationFolds=5;
+    numTrees=50;
     path(path,'randomforest-matlab-read-only/RF_Class_C/');
 
     %genes = 
@@ -13,53 +13,59 @@ function initial
     %  featnames: {1x11 cell}
     %  names: {1x5418 cell}
 
-    %c         = cvpartition(genes.labels,'holdout',.3);
-    %unlabeled = find(c.training);
-    %heldout   = find(c.test);
-    %labeled   = [];
     c = cvpartition(genes.labels,'k',validationFolds);
+    r=struct;
+
+    %for each fold
     for f=1:c.NumTestSets
 	RF               = classRF_train(genes.feats(c.training(f),:),genes.labels(c.training(f)),numTrees);
 	[results, votes] = classRF_predict(genes.feats(c.test(f)),RF);
+
+	%%%%%%%%%%%%%%%%%%
+
+
+	%%%%%%%%%%%%%%%%%%
 
 	%positive index of labels in test
         posIdx = find(genes.labels(c.test(f)) == 1);
         negIdx = find(genes.labels(c.test(f)) == 0);
 
-	TP = length(  find( results(posIdx) ==1 )  );
-	TN = length(  find( results(negIdx) ==0 )  );
-	FP = length(  find( results(negIdx) ==1 )  );
-	FN = length(  find( results(posIdx) ==0 )  );
+	r.TP(f) = length(  find( results(posIdx) ==1 )  );
+	r.TN(f) = length(  find( results(negIdx) ==0 )  );
+	r.FP(f) = length(  find( results(negIdx) ==1 )  );
+	r.FN(f) = length(  find( results(posIdx) ==0 )  );
 
-	accuracy    = (TP+TN)/c.TestSize(f);
-	sensitivity =      TP/(TP+FN);
-	specificity =      TP/(TN+FP);
-	FPR	    =      FP/(FP+TN);
+	r.accuracy(f)	 = (r.TP(f)+r.TN(f))/c.TestSize(f);
+	r.sensitivity(f) =           r.TP(f)/( r.TP(f) + r.FN(f) );
+	r.specificity(f) =           r.TP(f)/( r.TN(f) + r.FP(f) );
+	r.FPR(f)	 =           r.FP(f)/( r.FP(f) + r.TN(f) );
 
-	fprintf(['*\tTP\tTN\t\tFP\tFN\tacc\tsens\tspec\tFPR\n',     ...
-	         '\t%i\t%i\t\t%i\t%i\t%.3f\t%.3f\t%.3f\t%.3f\n\n'], ...
-		TP,TN,FP,FN,accuracy,sensitivity, specificity,FPR );
 
 	%label	predict	diff	|     votes
+	%			| class(1) - class(0)
 	% 1	1	0   TP	| >0  more for 1   P
 	% 0	0	0   TN	| <0  more for 0   N
 	% 1	0	1   FN	|
 	% 0	1	-1  FP	|
-	votediff = [genes.labels(c.test(f)) - results, votes(:,1) - votes(:,2)];
+	votediff = [genes.labels(c.test(f)) - results, votes(:,2) - votes(:,1)];
 	%the avg of how many more votes went positive for correctly classified
-	FNdiff   = sum( votediff(find(votediff(:,1)==1),2) )/FN;
-	FPdiff   = sum( votediff(find(votediff(:,1)==-1),2) )/FP;
-	%first is 0 (no diff==match), second is which side of 0
-	TPdiff   = sum( votediff(find( votediff(find(votediff(:,1)==0),2) > 0 ),2) )/TP;
-	TNdiff   = sum( votediff(find( votediff(find(votediff(:,1)==0),2) < 0 ),2) )/TN;
-
-	fprintf(['avg\ttpdif\ttndiff\t\tfpdiff\tfndiff\n', ...
-	         '\t%2.1f\t%2.1f\t\t%2.1f\t%2.1f\n\n\n'],  ...
-		TPdiff,TNdiff,FPdiff,FNdiff);
-
-
+	r.FNdiff(f)   = sum( votediff(find(votediff(:,1)==1),2) )/r.FN(f);
+	r.FPdiff(f)   = sum( votediff(find(votediff(:,1)==-1),2) )/r.FP(f);
+	%trues are (1) == 0 (no diff==match)
+	%find which side of 0 trutth si on to deterim if TN or TP
+	trues         = votediff(find(votediff(:,1)==0),:);
+	r.TPdiff(f)   = sum( trues( find( trues(:,2) > 0 ),2)) / r.TP(f);
+	r.TNdiff(f)   = sum( trues( find( trues(:,2) < 0 ),2)) / r.TN(f);
 
     end
+
+    names=fieldnames(r);
+    for n=1:length(names)
+	fprintf('\t%s\t%2.2f\n', ...
+	    names{n},           ...
+	    sum(getfield(r,names{n}))/c.NumTestSets);
+    end
+
 
     %err = zeros(CVO.NumTestSets,1);
     %for i = 1:CVO.NumTestSets
@@ -115,6 +121,20 @@ function randtrain(i)
     TN = length( find( results( find(genes.labels == 0) ) ==0) );
     FP = length( find( results( find(genes.labels == 0) ) ==1) );
     FN = length( find( results( find(genes.labels == 1) ) ==0) );
+
+
+    %%%%%%%%%
+    %for tree
+    %%%%%%%%%
+    votediff = [genes.labels(c.test(f)) - results, votes(:,1) - votes(:,2)];
+    %the avg of how many more votes went positive for correctly classified
+    FNdiff  = sum( votediff(find(votediff(:,1)==1),2) )/FN;
+    FPdiff  = sum( votediff(find(votediff(:,1)==-1),2) )/FP;
+    %first is 0 (no diff==match), second is which side of 0
+    TPdiff(f)   = sum( votediff(find( votediff(find(votediff(:,1)==0),2) > 0 ),2) )/TP;
+    TNdiff(f)   = sum( votediff(find( votediff(find(votediff(:,1)==0),2) < 0 ),2) )/TN;
+    %%%%%%%%%
+
     correct(i)=(TP+TN)/length(genes.labels)*100;
     fprintf('[*] %i - %i (%i)\n', i, length(trainIdx), length(unique(trainIdx)));
     fprintf('\tTP\tTN\t\tFP\tFN\tcorrect\n\t%i\t%i\t\t%i\t%i\t%2.1f\n\n', TP,TN,FP,FN,correct(i));
