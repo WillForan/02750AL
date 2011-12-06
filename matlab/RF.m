@@ -4,6 +4,7 @@ function initial
 
     load 'genes.mat';
     validationFolds=3;
+    numTrees=100;
     path(path,'randomforest-matlab-read-only/RF_Class_C/');
 
     %genes = 
@@ -18,7 +19,7 @@ function initial
     %labeled   = [];
     c = cvpartition(genes.labels,'k',validationFolds);
     for f=1:c.NumTestSets
-	RF               = classRF_train(genes.feats(c.training(f),:),genes.labels(c.training(f)),500);
+	RF               = classRF_train(genes.feats(c.training(f),:),genes.labels(c.training(f)),numTrees);
 	[results, votes] = classRF_predict(genes.feats(c.test(f)),RF);
 
 	%positive index of labels in test
@@ -30,7 +31,7 @@ function initial
 	FP = length(  find( results(negIdx) ==1 )  );
 	FN = length(  find( results(posIdx) ==0 )  );
 
-	accuracy    = (TP+TN)/length(c.test(f));
+	accuracy    = (TP+TN)/c.TestSize(f);
 	sensitivity =      TP/(TP+FN);
 	specificity =      TP/(TN+FP);
 	FPR	    =      FP/(FP+TN);
