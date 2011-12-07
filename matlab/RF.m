@@ -18,12 +18,18 @@ function initial
     r=struct;
 
     %define methods
-    stats.random.ontest  = struct;
-    stats.random.ontrain = struct;
+    stats.RFMostVotes.ontest   = struct; stats.RFMostVotes.ontrain = struct;
+    stats.RFMostVotes.updater  = @updateTrainIdxMostVotes;
+    stats.RFMostVotes.trainer  = @trainRF;
+    stats.RFMostVotes.testCly  = @classifyRF_ontest;
+    stats.RFMostVotes.trainCly = @classifyRF_ontrain;
+    stats.RFMostVotes.imgfile  = 'RF-MV';
+    stats.RFMostVotes.title    = ['Random Forest (' num2str(numTrees)      ...
+                                 ')- Most Votes selection' ];
 
     %accuracy for each fold and each interval step
     maxIterations  = ceil(max(c.TrainSize)/BatchSize);
-    stats.accuracy = zeros(c.NumTestSets, maxIterations );
+    %stats.accuracy = zeros(c.NumTestSets, maxIterations );
     numInstStart   = floor(min(c.TrainSize)/10); %always start with 10% of the smallest training set
 
     %for each fold
@@ -44,6 +50,9 @@ function initial
 	trainIdx     = avalableIdx(removeIdxIdx); 		%add the indexes to trainIdx
 	avalableIdx(removeIdxIdx)=[]; 				%remove avalability
 
+	stats.RFMostVotes.ontrain.avalableIdx=avalableIdx;
+	stats.RFMostVotes.ontrain.trainIdx=trainIdx;
+
         %count the number of differentially expressed genes
 	%allPosi(f) = length(find(genes.labels(avalableIdx)==1));
 
@@ -53,21 +62,22 @@ function initial
 	i=1;
 
 	%%%% contine until there are no points left
-	while(length(avalableIdx)>0)
+	while(length(stats.RFMostVotes.ontrain.avalableIdx)>0)
 
 	    %%%%%MODEL
 	    %populate model (global) with trainIdx
-	    trainRF(f,i,trainIdx);
+	    stats.RFMostVotes.trainer(f,i,stats.RFMostVotes.ontrain.trainIdx);
 	    %classify this model on what is left out for testing
-	    stats.random.ontest  = classifyRF_ontest(f,i, stats.random.ontest);
+	    stats.RFMostVotes.ontest  = stats.RFMostVotes.testCly(f,i, stats.RFMostVotes.ontest);
 	    %classify this model on what we've seen so far
-	    stats.random.ontrain = classifyRF_ontrain(f,i,stats.random.ontrain);
+	    stats.RFMostVotes.ontrain = stats.RFMostVotes.trainCly(f,i,stats.RFMostVotes.ontrain);
 
-	    %%%%Instance selection
+
+	    %%%%Instance selection for next training round
 	    %we're on the next step now
 	    i=i+1;
 	    %pick what to look at next
-	    updateTrainIdxMostVotes
+	    stats.RFMostVotes.ontrain = stats.RFMostVotes.updater(stats.RFMostVotes.ontrain);
 	    %%choose from
 	    %%updateTrainIdxRND;
 	    %%updateTrainIdxMostVotes
@@ -75,23 +85,23 @@ function initial
     end
 
 
-    aTP = sum(stats.random.ontrain.TP ) ./ c.NumTestSets;
-    aTN = sum(stats.random.ontrain.TN ) ./ c.NumTestSets;
-    aFP = sum(stats.random.ontrain.FP ) ./ c.NumTestSets;
-    aFN = sum(stats.random.ontrain.FN ) ./ c.NumTestSets;
+    aTP = sum(stats.RFMostVotes.ontrain.TP ) ./ c.NumTestSets;
+    aTN = sum(stats.RFMostVotes.ontrain.TN ) ./ c.NumTestSets;
+    aFP = sum(stats.RFMostVotes.ontrain.FP ) ./ c.NumTestSets;
+    aFN = sum(stats.RFMostVotes.ontrain.FN ) ./ c.NumTestSets;
 
-    for f=1:c.NumTestSets; TPr(f,:) = stats.random.ontrain.TP(f,:) ./ length(find(genes.labels(c.training(f))==1)); end;
+    for f=1:c.NumTestSets; TPr(f,:) = stats.RFMostVotes.ontrain.TP(f,:) ./ length(find(genes.labels(c.training(f))==1)); end;
     TPr = sum(TPr) ./ c.NumTestSets;
 
-    bTP = sum(stats.random.ontest.TP ) ./ c.NumTestSets;
-    bTN = sum(stats.random.ontest.TN ) ./ c.NumTestSets;
-    bFP = sum(stats.random.ontest.FP ) ./ c.NumTestSets;
-    bFN = sum(stats.random.ontest.FN ) ./ c.NumTestSets;
+    bTP = sum(stats.RFMostVotes.ontest.TP ) ./ c.NumTestSets;
+    bTN = sum(stats.RFMostVotes.ontest.TN ) ./ c.NumTestSets;
+    bFP = sum(stats.RFMostVotes.ontest.FP ) ./ c.NumTestSets;
+    bFN = sum(stats.RFMostVotes.ontest.FN ) ./ c.NumTestSets;
 
     fig=figure;
-    %plot ([1:maxIterations] .* BatchSize,sum(stats.random.accuracy) ./ c.NumTestSets);
+    %plot ([1:maxIterations] .* BatchSize,sum(stats.RFMostVotes.accuracy) ./ c.NumTestSets);
     plot (...
-          [ numInstStart:BatchSize:BatchSize*(length(stats.random.ontest.TP)-1)+numInstStart], ...
+          [ numInstStart:BatchSize:BatchSize*(length(stats.RFMostVotes.ontest.TP)-1)+numInstStart], ...
           [ TPr
 	    (aTP + aTN)./(aTP + aTN + aFP + aFN)
 	    (bTP + bTN)./(bTP + bTN + bFP + bFN) ...
@@ -102,9 +112,9 @@ function initial
 	    %TP./(TN+FP) ... Sepecificity
 	    %FP./(FP+TN) ... 
     legend({'TruePos:Total','Train Accuracy','Test Accuracy'},'Location', 'NorthOutside');
-    title(['Random Forest - Most Votes selection - Batch Size ' num2str(BatchSize) '- ' num2str(validationFolds) ' Folds']);
+    title([ stats.RFMostVotes.title ' - Batch Size ' num2str(BatchSize) '- ' num2str(validationFolds) ' Folds']);
     xlabel('Instances Seen'); ylabel(''); 
-    hgexport(fig,'img/RF-MV')
+    hgexport(fig,['img/' stats.RFMostVotes.imgfile])
 
 
     %names=fieldnames(r);
@@ -134,7 +144,7 @@ function ontest=classifyRF_ontest(f,i,ontest)
 
 
     %%%%%%%%%
-    %for tree
+    %%for tree
     %%%%%%%%%
 
     posIdx = find(genes.labels(c.test(f)) == 1);
@@ -145,20 +155,19 @@ function ontest=classifyRF_ontest(f,i,ontest)
     ontest.FP(f,i) = length(  find( results(negIdx) ==1 )  );
     ontest.FN(f,i) = length(  find( results(posIdx) ==0 )  );
 
-    fprintf('[** test] %i - %i\n', i, length(trainIdx));
+    fprintf('[** test] %i\n', i);
     %votediff = [genes.labels(c.test(f)) - results, votes(:,1) - votes(:,2)];
     %trues         = votediff(find(votediff(:,1)==0),:);
-    %stats.random.accuracy(f,i)=length(trues)/c.TestSize(f);
-    %fprintf('[*] %i - %i\t%.3f\n', i, length(trainIdx),stats.random.accuracy(f,i));
+    %stats.RFMostVotes.accuracy(f,i)=length(trues)/c.TestSize(f);
+    %fprintf('[*] %i - %i\t%.3f\n', i, length(trainIdx),stats.RFMostVotes.accuracy(f,i));
 end
 function ontrain = classifyRF_ontrain(f,i,ontrain)
     globals;
 
     %get total results
     results=zeros(1,c.TestSize(f));
-    ontrain.votes=[];%zeros(1,genes.feats(avalableIdx));
-    Idx=trainIdx;
-    [results,votes] = classRF_predict(genes.feats(Idx,:),model);
+    Idx=[ontrain.trainIdx ontrain.avalableIdx];
+    results = classRF_predict(genes.feats(Idx,:),model);
 
 
 
@@ -170,38 +179,39 @@ function ontrain = classifyRF_ontrain(f,i,ontrain)
     ontrain.FP(f,i) = length(  find( results(negIdx) ==1 )  );
     ontrain.FN(f,i) = length(  find( results(posIdx) ==0 )  );
 
-    fprintf('[** train] %i - %i\n', i, length(trainIdx));
+    fprintf('[** train] %i - %i\n', i, length(ontrain.trainIdx));
     return
 end
 
-function updateTrainIdxRND
+function ontrain = updateTrainIdxRND(ontrain)
     globals;
-    remain = length(avalableIdx);
+    remain = length(ontrain.avalableIdx);
     batch  = BatchSize;
     if(remain < batch); batch=remain; end; 
 
     removeIdxIdx = randsample( length(avalableIdx), batch );
-    trainIdx=[trainIdx avalableIdx(removeIdxIdx)];
-    avalableIdx(removeIdxIdx) = [];
+    ontrain.trainIdx=[ontrain.trainIdx ontrain.avalableIdx(removeIdxIdx)];
+    ontrain.avalableIdx(removeIdxIdx) = [];
 end
 
-function updateTrainIdxMostVotes
+function ontrain = updateTrainIdxMostVotes(ontrain)
     globals;
 
     %classify on only the stuff we haven't seen
     % and get Idx of avalableIdx ranked by vote difference
-    [results,votes] = classRF_predict(genes.feats(avalableIdx,:),model);
-    [~,votes]=sort(votes(:,1) - votes(:,2));
+    [results,votes] = classRF_predict(genes.feats(ontrain.avalableIdx,:),model);
+    [~,votes]       = sort(votes(:,1) - votes(:,2));
 
     %set batch
-    remain = length(avalableIdx);
+    remain = length(ontrain.avalableIdx);
     batch  = BatchSize;
     if(remain < batch); batch=remain-1; end; 
 
 
-    removeIdxIdx = votes(end-batch:end);
-    trainIdx=[trainIdx avalableIdx(removeIdxIdx)];
-    avalableIdx(removeIdxIdx) = [];
+    %update usagage indexes
+    removeIdxIdx     = votes(end-batch:end);
+    ontrain.trainIdx = [ontrain.trainIdx ontrain.avalableIdx(removeIdxIdx)];
+    ontrain.avalableIdx(removeIdxIdx) = [];
 end
 
 function treeJunk
