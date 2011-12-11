@@ -48,6 +48,9 @@ function graphs(usemethods,c)
 	%build plot data 
 	%%%%
 	TPr(ii,:) = sum(TPr) ./ AL.(alType).validationFolds;
+
+	if(TPr(ii,:)>1); fprintf('%s bigger than 1!(%i)\n',alType,AL.(alType).validationFolds); end;
+
 	trainAccuracy(ii,:) = (aTP + aTN)./(aTP + aTN + aFP + aFN);
 	testAccuracy(ii,:)  = (bTP + bTN)./(bTP + bTN + bFP + bFN);
 	%TP./(TP+FN) ... Sensitivity
@@ -58,15 +61,16 @@ function graphs(usemethods,c)
 	%
 	% Plots
 	%
-	%%
+	%%%%%
 	instances=[ AL.(alType).numInstStart:AL.(alType).BatchSize:AL.(alType).BatchSize*(length(AL.(alType).ontest.TP)-1)+AL.(alType).numInstStart];
 	fig=figure;
 	%plot ([1:maxIterations] .* BatchSize,sum(AL.(alType).accuracy) ./ c.validationFolds);
-	plot (instances, ...
+	plot ( AL.(alType).ontrain.batch(1:size(TPr,2)), ...
 	      [ TPr(ii,:) 
 	        trainAccuracy(ii,:)
 	        testAccuracy(ii,:) ...
-		] ...
+		], ...
+		'-s' ...
 	     );
 	
 
@@ -77,23 +81,31 @@ function graphs(usemethods,c)
 
     end
 
+    if length(usemethods)<2
+	return
+	%don't overwrite comparison plots if nothing to compare
+    end
 
+    %assume all plots are scaled the same with same batch numbers.. eww
     fig=figure;
-    plot(instances,trainAccuracy)
+    %plot(instances,trainAccuracy)
+    plot(1:length(trainAccuracy),trainAccuracy)
     title('Train Accuracies');
     xlabel('Instances Seen'); ylabel(''); 
     legend(usemethods,'Location', 'NorthOutside');
     hgexport(fig,'img/trainAccuracies');
 
     fig=figure;
-    plot(instances,testAccuracy)
+    plot(1:length(testAccuracy),testAccuracy)
+    %plot(instances,testAccuracy)
     title('Test Accuracies');
     xlabel('Instances Seen'); ylabel(''); 
     legend(usemethods,'Location', 'NorthOutside');
     hgexport(fig,'img/testAccuracies');
 
     fig=figure;
-    plot(instances, TPr)
+    plot(1:length(TPr),TPr)
+    %plot(instances, TPr)
     title('True Positve Ratio');
     xlabel('Instances Seen'); ylabel(''); 
     legend(usemethods,'Location', 'NorthOutside');
