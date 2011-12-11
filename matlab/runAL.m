@@ -1,4 +1,4 @@
-function RF(usemethods)
+function runAL(usemethods)
     %clear all;
     globals;
 
