@@ -1,0 +1,23 @@
+Wed Dec  7 15:08:03 EST 2011
+Create k-folds of the data
+  for each fold
+    XXXX randomly select 10% of the tranning data (call this trainingSubset)
+    select intial with random (or kmeans)
+
+    count number of postive instances in this selection
+
+    train on trainingSubset
+    classify on all training Set (reaches 100% of trained at last iteration)
+    classify on test partion     (to get accuracy)
+
+     for each selection method 
+	while(trainingSubset != training)
+	    pick next n (BatchSize) instances to add to trainingSubset using whatever method
+	    train on new trainingSubset
+
+	    classify on {training,test}
+	--exhausted training partion
+    --completed for all methods
+   --exhuasted folds
+
+   average results over all folds
