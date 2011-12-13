@@ -3,6 +3,7 @@
 %%%%%%%%%%%%%%%%%%%
 %Most Votes
 AL.RFMostVotes.ontest   = struct; AL.RFMostVotes.ontrain = struct;
+AL.RFMostVotes.initup   = @updateTrainIdxRND;
 AL.RFMostVotes.updater  = @updateTrainIdxMostVotes;
 AL.RFMostVotes.trainer  = @trainRF;
 AL.RFMostVotes.testCly  = @classifyRF_ontest;
@@ -35,13 +36,27 @@ AL.RFEntropy.imgfile   = 'RF-E';
 AL.RFEntropy.title     = ['Random Forest (' num2str(numTrees)      ...
        		     ')- Entropy selection' ];
 
+AL.RFEntropyMIP         = AL.RFMostVotes;
+AL.RFEntropyMIP.updater = @updateTrainIdxRFEntropyMIP;
+AL.RFEntropyMIP.imgfile = 'RF-EntropyMIP';
+AL.RFEntropyMIP.title   = ['Random Forest (' num2str(numTrees)      ...
+       		     ')- Entropy MIP selection' ];
+
 AL.RFConfusion         = AL.RFMostVotes;
-AL.RFConfusion.init    = @updateTrainIdxKmeans;
+AL.RFConfusion.initup  = @updateTrainIdxKMeans;
 AL.RFConfusion.updater = @updateTrainIdxRFConfusion;
 %AL.RFConfusion.default = @updateTrainIdxKmeans; %does not work
 AL.RFConfusion.imgfile = 'RF-Confusion';
 AL.RFConfusion.title   = ['Random Forest (' num2str(numTrees)      ...
        		     ')- Confusion selection' ];
+
+AL.RFConfusionMIP         = AL.RFMostVotes;
+AL.RFConfusionMIP.initup  = @updateTrainIdxKMeans;
+AL.RFConfusionMIP.updater = @updateTrainIdxRFConfusionMIP;
+AL.RFConfusionMIP.imgfile = 'RF-ConfusionMIP';
+AL.RFConfusionMIP.title   = ['Random Forest (' num2str(numTrees)      ...
+       		     ')- Confusion MIP selection' ];
+
 
 AL.RFLV             = AL.RFMostVotes;
 AL.RFLV.updater     = @updateTrainIdxLeastVotes;
@@ -50,6 +65,7 @@ AL.RFLV.title       = ['Random Forest (' num2str(numTrees)      ...
 			     ')- Least Votes selection' ];
 
 AL.SMORND.ontest   = struct; AL.RFMostVotes.ontrain = struct;
+AL.SMORND.initup   = @updateTrainIdxRND;
 AL.SMORND.updater  = @updateTrainIdxRND;
 AL.SMORND.trainer  = @trainSMO;
 AL.SMORND.testCly  = @classifySMO_ontest;
