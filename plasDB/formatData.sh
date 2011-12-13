@@ -1,6 +1,6 @@
 #!/bin/bash
 #######
-# 1        Gene ID	
+# 1     0  Gene ID	
 # 2   x 1  Genomic Sequence ID	
 # 3   x 2  Organism	
 # 4   x 3  Chromosome	
@@ -46,18 +46,19 @@
 # 44    43 Nonsyn/Syn SNP Ratio All Strains	
 # 45  x 44 Predicted Protein Sequence	
 # 46  x 45 Weight	#always 10	
-#.45  x 46 empty string?
-# 47    47 Max Fold Induction
+#        6 LENGTH
+#        7 GC
+# 49    48 Max Fold Induction
 ######
 
 #join -a1 -j1 -t"	"  <(sort pf5_summary.txt|cut -f1,9,10,14,15,17,38,39,41-44,46)   <(sort llinas_maxOverAll.txt)| sed 's/null/0/g;s/\t/,/g;'
 
-join -a1 -j1 -t"	"  <(sort pf5_summary.txt)   <(sort llinas_maxOverAll.txt) |
- sed 's/No/0/g;s/Yes/1/g;s/null/0/g;s/\[//g;s/\]//g;'|
+join -a1 -j1 -t"	"  <(sort <(paste pf5_summary.txt <(cut -d"	" -f2,3 length_gc)))   <(sort llinas_maxOverAll.txt) |
+ sed 's/\t\t/\t/g;s/No/0/g;s/Yes/1/g;s/null/0/g;s/\[//g;s/\]//g;'|
  perl -Mv5.10 -F"\t"  -slane '
   BEGIN{
-      @fields=qw/0 8 13 14 16 37 38 40 41 42 43/; 
-      $labelIDX=47; 
+      @fields=qw/0 8 13 14 16 37 38 40 41 42 43 46 47/; 
+      $labelIDX=48; 
 
       @head;
   }
