@@ -1,36 +1,70 @@
-function runAL(usemethods)
+% for i=1:5; for d={'PPI' 'PF'}; runAL({'RFKMeans' 'RFConfusion'  'RFMostVotes' 'RFMostPositiveVotes' 'SMORND' 'RFRandom' 'RFEntropy'},d{1},i); end; end;     
+function runAL(usemethods, whichdata, whichiteration)
     %clear all;
     globals;
 
-    %load 'genes.mat';
-    %ResultsFolder='alResults';
-
-    load 'PPI.mat';
-    ResultsFolder='PPIResults';
-
-    validationFolds=2;
+    validationFolds=5;
     numTrees=30;
-    BatchSize=100;
-    Clusters=4;
+    numInstances=15; %determines batchSize
+
+    %Default to genes
+    %load 'genes.mat';ResultsFolder='alResults';
+    %give genes.feats and genes.labels
+
+    %Can also load PPI
+    %load 'PPI.mat'; ResultsFolder='PPIResults';
+    % still has genes.feats and genes.labels structure
+
+    if(exist('whichdata'))
+	switch whichdata
+	case {'PPI' 'ppi'}
+	    loadPPI;
+	case {'PF','genes'}
+	    loadGenes;
+	otherwise
+	    loadGenes;
+	end
+    else
+	loadGenes;
+    end
+
+    if(~exist('whichiteration'))
+	whichiteration='';
+    else
+	whichiteration=num2str(whichiteration);
+    end
 
 
+    %%%%% TESTING
+    %ResultsFolder='Tests'
+    %validationFolds=2;
+    %numTrees=15;
+    %numInstances=5; %determines batchSize
+    %%%%%
 
+    %load Random Forest MEX (unstable!but svn@46 doesn't compile)
     path(path,'randomforest-matlab-read-only/RF_Class_C/');
 
-    %genes = 
-    %  feats: [5418x11 double]
-    %  labels: [5418x1 double]
-    %  featnames: {1x11 cell}
-    %  names: {1x5418 cell}
 
+    %parition data for kfold cross-validation
     c = cvpartition(genes.labels,'k',validationFolds);
-    %load('partion.mat'); %loads c
-    r=struct;
+
+    %BatchSize is given by the numInstances we want and the size of what we have to work with
+    BatchSize     = floor(min(c.TrainSize)/numInstances); %floor to sqeeze the last incomplete batch in
+    maxIterations = ceil(max(c.TrainSize)/BatchSize);
+
+    %%dont do this, we want different (random) partions
+    %load('partion.mat'); %loads c 
+    %%could be useful to keep trails compareable
+
+    %results structure -- not used anymore
+    %r=struct;
 
     %%%%%%%%%%%%%%%%%%%
-    %define methods
+    %define Active Learning methods
     %%%%%%%%%%%%%%%%%%%
     loadMethods; %e.g. AL.RFLV AL.RFRandom
+    
     if(~exist('usemethods'))
 	%usemethods={'RFRandom'};
 	%usemethods={'RFMostVotes',  'RFLV'};
@@ -38,9 +72,10 @@ function runAL(usemethods)
     end
 
     %accuracy for each fold and each interval step
-    maxIterations  = ceil(max(c.TrainSize)/BatchSize);
     %AL.accuracy = zeros(c.NumTestSets, maxIterations );
-    numInstStart   = floor(min(c.TrainSize)/10); %always start with 10% of the smallest training set
+
+    %% if starting with 10% random, should use this -- not used
+    %numInstStart   = floor(min(c.TrainSize)/10); %always start with 10% of the smallest training set
 
     %%%%%%%
     %for each fold
@@ -74,7 +109,7 @@ function runAL(usemethods)
 	%%
 	for alType=usemethods
 	    alType=alType{1};
-	    disp(alType);
+	    fprintf('\t[%s]\n',alType);
 	    
 	    %initial step has no selection
 	    i=0;
@@ -91,7 +126,10 @@ function runAL(usemethods)
 		i=i+1;
 		if(i==1)
 		    AL.(alType).ontrain.trainIdx=[];
-		    AL.(alType).ontrain = updateTrainIdxRND(AL.(alType).ontrain);
+		    %always use random for first
+		    %AL.(alType).ontrain = updateTrainIdxRND(AL.(alType).ontrain);
+		    %use what the structure says to
+		    AL.(alType).ontrain = AL.(alType).initup(AL.(alType).ontrain);
 		else
 		    %pick what to look at next
 		    AL.(alType).ontrain = AL.(alType).updater(AL.(alType).ontrain);
@@ -99,14 +137,20 @@ function runAL(usemethods)
 
 		%how much of the last pick is postive
 		AL.(alType).numPos{f}(i) = howManyPos(i,AL.(alType).ontrain);
+		fprintf('[*] %i\t%i\t%i P\t',i, ...
+		       length(AL.(alType).ontrain.trainIdx), ...
+		       AL.(alType).numPos{f}(i) );
 
 		%%%%%MODEL
 		%populate model (global) 
 		AL.(alType).trainer(f,i,AL.(alType).ontrain.trainIdx);
+		fprintf('trained',i);
 		%classify this model on what is left out for testing
 		AL.(alType).ontest  = AL.(alType).testCly(f,i, AL.(alType).ontest);
+		fprintf(' - tested');
 		%classify this model on what we've seen so far
 		AL.(alType).ontrain = AL.(alType).trainCly(f,i,AL.(alType).ontrain);
+		fprintf(' - evaluated\n');
 
 
 	    end
@@ -121,8 +165,17 @@ function runAL(usemethods)
 	AL.(alType).BatchSize=BatchSize;
 	AL.(alType).numTrees=numTrees;
 	AL.(alType).training=arrayfun(@(x)(c.training(x)), [1:validationFolds],'UniformOutput',0);
-	AL.(alType).numInstStart=numInstStart;
-	save([ ResultsFolder '/' (alType) '.mat'],'-struct', 'AL', alType);
+	%AL.(alType).numInstStart=numInstStart;
+	filename=[ ResultsFolder '/' whichiteration (alType) '.mat'];
+	fprintf('{*} Saving to %s\n', filename);
+	save(filename,'-struct', 'AL', alType);
+
+	%%%% CHECK OUTPUT
+	fprintf('second training set looks like:\n');
+	reshape(AL.(alType).training{2}([1:10;end-9:end]),10,2)
+	fprintf('first TPs look like');
+	reshape(AL.(alType).ontrain.TP{1}([1:10;end-9:end]),10,2)
+
     end
     %save partion stuff
     %save('partion.mat','c');
@@ -156,7 +209,7 @@ function ontest = classifySMO_ontest(f,i,ontest)
     results = svmclassify(model,genes.feats(Idx,:));
 
     ontest=setResults(f,i,results,ontest,Idx);
-    fprintf('[** test]\n');
+    %fprintf('[** test]\n');
 end
 
 %%% SMO train results %%%%%
@@ -170,7 +223,7 @@ function ontrain = classifySMO_ontrain(f,i,ontrain)
 
     %set TP,FP,TN,TP for each batch
     ontrain=setResults(f,i,results,ontrain,Idx);
-    fprintf('[** train] %i - %i\n', i, length(ontrain.trainIdx));
+    %fprintf('[** train] %i - %i\n', i, length(ontrain.trainIdx));
 end
 
 %%% Forset test results %%%%%
@@ -180,10 +233,10 @@ function ontest=classifyRF_ontest(f,i,ontest)
     %get total results
     results=zeros(1,c.TestSize(f));
     Idx=c.test(f);
-    results = classRF_predict(genes.feats(Idx),model);
+    results = classRF_predict(genes.feats(Idx,:),model);
 
     ontest=setResults(f,i,results,ontest,Idx);
-    fprintf('[** test] %i\n', i);
+    %fprintf('[** test] %i\n', i);
 end
 
 %%% Forset train results %%%%%
@@ -196,15 +249,12 @@ function ontrain = classifyRF_ontrain(f,i,ontrain)
     results = classRF_predict(genes.feats(Idx,:),model);
 
     ontrain=setResults(f,i,results,ontrain,Idx);
-    fprintf('[** train] %i - %i\n', i, length(ontrain.trainIdx));
+    %fprintf('[** train] %i - %i\n', i, length(ontrain.trainIdx));
 end
 
 %%% Generic Results from Interation i on partition f given results and an index for labels
 function rStruct=setResults(f,i,results,rStruct,Idx)
-    %
-    % SHOULD BE CUMULITIVE
-    % NOT DIFF COUNT EACH ITERATION!
-    %
+    %For accuracy/recall per iteration
     globals;
     posIdx = find(genes.labels(Idx) == 1);
     negIdx = find(genes.labels(Idx) == 0);
@@ -215,6 +265,11 @@ function rStruct=setResults(f,i,results,rStruct,Idx)
     rStruct.FN{f}(i) = length(  find( results(posIdx) ==0 )  );
 end
 
+%%%%%%%%%%%%%%%%
+% how many positives were just selected in the most recent batch?
+% because trainIdx is global for each fold, this cannot be done afterward
+% should changed trainIdx to be trianIdx{f} so it is more general
+%%%%%%%%%%%%%%%%
 function numPos = howManyPos(i,ontrain)
    global fold genes;
    %batch size bewteen this and last (should be BatchSize, unless KMeans or end of the line)
@@ -321,6 +376,7 @@ function ontrain = updateTrainIdxKMeans(ontrain)
 end
 
 %%% Most votes (RF) become new instances %%%
+%%% There is a segfault bug in here sometimes, I think it is size of removeIdxIdx end-batch-1?
 function ontrain = updateTrainIdxMostVotes(ontrain)
     globals;
 
@@ -332,11 +388,11 @@ function ontrain = updateTrainIdxMostVotes(ontrain)
     %set batch
     remain = length(ontrain.avalableIdx);
     batch  = BatchSize;
-    if(remain < batch); batch=remain-1; end; 
+    if(remain < batch); batch=remain; end; 
 
 
     %update usagage indexes
-    removeIdxIdx     = votes(end-batch:end);
+    removeIdxIdx     = votes(end-batch-1:end);
 
     ontrain=updateTrainIdx(ontrain,removeIdxIdx);
 end
