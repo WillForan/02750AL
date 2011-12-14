@@ -18,6 +18,12 @@ AL.RFLeastVotesCheap.imgfile     = 'RF-MVC';
 AL.RFLeastVotesCheap.title       = ['Random Forest (' num2str(numTrees)      ...
        		                       ')- Least Chepeast Votes' ];
 
+AL.RFLeastPositiveVotesCheap             = AL.RFLeastVotes;
+AL.RFLeastPositiveVotesCheap.updater     = @updateTrainIdxLeastPositiveVotesCheap;
+AL.RFLeastPositiveVotesCheap.imgfile     = 'RF-MVC';
+AL.RFLeastPositiveVotesCheap.title       = ['Random Forest (' num2str(numTrees)      ...
+       		                       ')- Least Positive Chepeast Votes' ];
+
 AL.RFLeastPositiveVotes             = AL.RFLeastVotes;
 AL.RFLeastPositiveVotes.updater     = @updateTrainIdxLeastPositiveVotes;
 AL.RFLeastPositiveVotes.imgfile     = 'RF-MPV';

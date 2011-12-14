@@ -447,7 +447,7 @@ function ontrain = updateTrainIdxRFEntropy(ontrain)
     globals;
 
     %entropy function
-    e=@(p,n) -1.*(p.*log2(p)+ n.*log2(n));
+    e=@(p,n) -1.*(p/numTrees.*log2(p/numTrees)+ n.*log2(n/numTrees));
 
     %classify on only the stuff we haven't seen
     % and get Idx of avalableIdx ranked by vote entropy
@@ -590,4 +590,13 @@ function ontrain=updateTrainIdx(ontrain,removeIdxIdx)
     else
 	ontrain.batch{fold}=[ontrain.batch{fold} ontrain.batch{fold}(end)+length(removeIdxIdx)];
     end
+end
+
+
+
+
+%%LEGACY for name mess up
+function updateTrainIdxMostPositiveVotes
+end
+function ontrain=updateTrainIdxMostVotes(ontrain)
 end

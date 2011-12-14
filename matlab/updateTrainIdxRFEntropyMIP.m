@@ -2,7 +2,7 @@ function ontrain = updateTrainIdxRFEntropy(ontrain)
     globals;
 
     %entropy function
-    e=@(p,n) -1.*(p.*log2(p)+ n.*log2(n));
+    e=@(p,n) -1.*(p/numTrees.*log2(p/numTrees)+ n.*log2(n/numTrees));
 
     %classify on only the stuff we haven't seen
     % and get Idx of avalableIdx ranked by vote entropy
@@ -15,7 +15,7 @@ function ontrain = updateTrainIdxRFEntropy(ontrain)
 
     %%%MIPS part
     %v1-v2>1 gives all predicted diff genes
-    posIdx=find(votes(:,1)-votes(:,2)>0);
+    posIdx=find(-votes(:,1)+votes(:,2)>0);
     w = max(entropy(posIdx)); %weight to add to all positive so they are choosen first!
     entropy(posIdx)=entropy(posIdx)+w;
     %%%%%

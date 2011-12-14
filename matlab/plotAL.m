@@ -203,16 +203,16 @@ function plotIndividual(inputdata,usemethods)
 	fprintf('%s total Cost\t%.3f\n',alType,totalCost);
 
 	%%%%Plots for individual learners
-	fig=figure;
-	plot( [1:minimumIterations], Plot{m}([1 2 4 7],:), '-s');
-	xlabel('Iteration'); ylabel('%'); 
-	%legend({'+/batch','TP:Total', 'Train Accuracy','Test Accuracy' 'Precision' 'Recall'}, ...
-	legend({'+/batch' 'TP:Total' 'Test Accuracy' 'FScore'}, ...
-	      'Location', 'EastOutside');
-	title([inputdata ' - ' AL.(alType).title ' - Batch Size ' num2str(AL.(alType).BatchSize) ...
-	       '- ' num2str(AL.(alType).validationFolds) ' Folds']);
-        
-	hgexport(fig,['img/' ResultsFolder '-' AL.(alType).imgfile])
+	%fig=figure;
+	%plot( [1:minimumIterations], Plot{m}([1 2 4 7],:), '-s');
+	%xlabel('Iteration'); ylabel('%'); 
+	%%legend({'+/batch','TP:Total', 'Train Accuracy','Test Accuracy' 'Precision' 'Recall'}, ...
+	%legend({'+/batch' 'TP:Total' 'Test Accuracy' 'FScore'}, ...
+	%      'Location', 'EastOutside');
+	%title([inputdata ' - ' AL.(alType).title ' - Batch Size ' num2str(AL.(alType).BatchSize) ...
+	%       '- ' num2str(AL.(alType).validationFolds) ' Folds']);
+        %
+	%hgexport(fig,['img/' ResultsFolder '-' AL.(alType).imgfile])
 
 
 
@@ -268,16 +268,16 @@ function plotIndividual(inputdata,usemethods)
     title('Test F-score');
     xlabel('Instances Seen'); ylabel(''); 
     legend(nameCorrect,'Location', 'EastOutside');
-    hgexport(fig,['img/' ResultsFolder '-testAccuracies']);
+    hgexport(fig,['img/' ResultsFolder '-testFScore']);
     %no cost in PPI
     if(~strcmp(ResultsFolder,'PPIResults'))
-	fig=figure;
-	plot([1:minimumIterations],Cost)
-	title('Cost');
-	ylabel('$');
-	xlabel('Instances Seen'); ylabel(''); 
-	legend(usemethods,'Location', 'EastOutside');
-	hgexport(fig,['img/' ResultsFolder '-cost']);
+        fig=figure;
+        plot([1:minimumIterations],Cost)
+        title('Cost');
+        ylabel('$');
+        xlabel('Instances Seen'); ylabel(''); 
+        legend(usemethods,'Location', 'EastOutside');
+        hgexport(fig,['img/' ResultsFolder '-cost']);
     end
 
 
