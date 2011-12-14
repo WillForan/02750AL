@@ -19,6 +19,8 @@ function runAL(usemethods, whichdata, whichiteration)
 	switch whichdata
 	case {'PPI' 'ppi'}
 	    loadPPI;
+	case {'oldPF','oldgenes','PFnogc'}
+	    loadGenes_nogc;
 	case {'PF','genes'}
 	    loadGenes;
 	otherwise
@@ -126,14 +128,20 @@ function runAL(usemethods, whichdata, whichiteration)
 		i=i+1;
 		if(i==1)
 		    AL.(alType).ontrain.trainIdx=[];
+		    prevLast=length(AL.(alType).ontrain.trainIdx);
 		    %always use random for first
 		    %AL.(alType).ontrain = updateTrainIdxRND(AL.(alType).ontrain);
 		    %use what the structure says to
 		    AL.(alType).ontrain = AL.(alType).initup(AL.(alType).ontrain);
 		else
+		    prevLast=length(AL.(alType).ontrain.trainIdx);
 		    %pick what to look at next
 		    AL.(alType).ontrain = AL.(alType).updater(AL.(alType).ontrain);
 		end
+
+		%what was added
+		AL.(alType).added{f}{i} = AL.(alType).ontrain.trainIdx(prevLast+1:end) ;
+
 
 		%how much of the last pick is postive
 		AL.(alType).numPos{f}(i) = howManyPos(i,AL.(alType).ontrain);
@@ -141,10 +149,14 @@ function runAL(usemethods, whichdata, whichiteration)
 		       length(AL.(alType).ontrain.trainIdx), ...
 		       AL.(alType).numPos{f}(i) );
 
+		%how much did it cost to make this selection
+		AL.(alType).cost{f}(i) = howExpensive(i,AL.(alType).added{f}{i});
+		fprintf('$%.2f', AL.(alType).cost{f}(i) );
+
 		%%%%%MODEL
 		%populate model (global) 
 		AL.(alType).trainer(f,i,AL.(alType).ontrain.trainIdx);
-		fprintf('trained',i);
+		fprintf(' - trained',i);
 		%classify this model on what is left out for testing
 		AL.(alType).ontest  = AL.(alType).testCly(f,i, AL.(alType).ontest);
 		fprintf(' - tested');
@@ -171,10 +183,10 @@ function runAL(usemethods, whichdata, whichiteration)
 	save(filename,'-struct', 'AL', alType);
 
 	%%%% CHECK OUTPUT
-	fprintf('second training set looks like:\n');
-	reshape(AL.(alType).training{2}([1:10;end-9:end]),10,2)
-	fprintf('first TPs look like');
-	reshape(AL.(alType).ontrain.TP{1}([1:10;end-9:end]),10,2)
+	%fprintf('second training set looks like:\n');
+	%reshape(AL.(alType).training{2}([1:10;end-9:end]),10,2)
+	%fprintf('first TPs look like');
+	%reshape(AL.(alType).ontrain.TP{1}([1:10;end-9:end]),10,2)
 
     end
     %save partion stuff
@@ -296,6 +308,19 @@ function numPos = howManyPos(i,ontrain)
 
 end
 
+%%%%%%%%%%
+% What is the cost of the selection
+%%%%%%%%%
+function cost = howExpensive(i,mostRecentIdx)
+   global fold genes;
+
+   %%% gc and length determin cost
+   len = genes.feats(mostRecentIdx,11);
+   gc  = genes.feats(mostRecentIdx,12);
+
+   cost=sum(costOne(len,gc));
+end
+
 
 %%%%%%% 
 %% Update instances to look at
@@ -377,13 +402,13 @@ end
 
 %%% Most votes (RF) become new instances %%%
 %%% There is a segfault bug in here sometimes, I think it is size of removeIdxIdx end-batch-1?
-function ontrain = updateTrainIdxMostVotes(ontrain)
+function ontrain = updateTrainIdxLeastVotes(ontrain)
     globals;
 
     %classify on only the stuff we haven't seen
     % and get Idx of avalableIdx ranked by vote difference
     [results,votes] = classRF_predict(genes.feats(ontrain.avalableIdx,:),model);
-    [~,votes]       = sort(abs(votes(:,1) - votes(:,2))); %the bigger the difference, the better
+    [~,votes]       = sort(abs(votes(:,1) - votes(:,2)),'descend'); %the bigger the difference, the better
 
     %set batch
     remain = length(ontrain.avalableIdx);
@@ -398,13 +423,13 @@ function ontrain = updateTrainIdxMostVotes(ontrain)
 end
 
 %%% Pick Most + Votes (RF) for new instances %%%
-function ontrain = updateTrainIdxMostPositiveVotes(ontrain)
+function ontrain = updateTrainIdxLeastPositiveVotes(ontrain)
     globals;
 
     %classify on only the stuff we haven't seen
     % and get Idx of avalableIdx ranked by vote difference
     [results,votes] = classRF_predict(genes.feats(ontrain.avalableIdx,:),model);
-    [~,votes]       = sort(votes(:,1) - votes(:,2)); %positive votes are true class
+    [~,votes]       = sort(votes(:,1) - votes(:,2),'descend'); %positive votes are true class
 
     %set batch
     remain = length(ontrain.avalableIdx);
@@ -413,7 +438,7 @@ function ontrain = updateTrainIdxMostPositiveVotes(ontrain)
 
 
     %update usagage indexes
-    removeIdxIdx     = votes(end-batch:end);
+    removeIdxIdx     = votes(end-batch-1:end);
 
     ontrain=updateTrainIdx(ontrain,removeIdxIdx);
 end
@@ -443,7 +468,7 @@ function ontrain = updateTrainIdxRFEntropy(ontrain)
 
 
     %update usagage indexes
-    removeIdxIdx = entropy(end-batch:end);
+    removeIdxIdx = entropy(end-batch-1:end);
 
     ontrain      = updateTrainIdx(ontrain,removeIdxIdx);
 end
@@ -523,7 +548,7 @@ function ontrain = updateTrainIdxRFConfusion(ontrain)
 
     %update usagage indexes
     if(batch<BatchSize);fprintf('small batch: %i; conf: %i\n',batch,length(confusion));end
-    removeIdxIdx = confusion(end-batch:end);
+    removeIdxIdx = confusion(end-batch-1:end);
 
     %update indexes
     ontrain      = updateTrainIdx(ontrain,removeIdxIdx);
@@ -545,7 +570,7 @@ function ontrain = updateTrainIdxLeastVotes(ontrain)
 
 
     %update usagage indexes
-    removeIdxIdx     = votes(end-batch:end);
+    removeIdxIdx     = votes(end-batch-1:end);
     ontrain=updateTrainIdx(ontrain,removeIdxIdx);
 end
 

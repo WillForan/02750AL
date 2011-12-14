@@ -32,7 +32,7 @@ function ontrain = updateTrainIdxRFEntropy(ontrain)
 
 
     %update usagage indexes
-    removeIdxIdx = entropy(end-batch:end);
+    removeIdxIdx = entropy(end-batch-1:end);
 
     ontrain      = updateTrainIdx(ontrain,removeIdxIdx);
 end

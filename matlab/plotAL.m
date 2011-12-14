@@ -5,12 +5,16 @@
 %%%%%%%%%%%%%%%%%%
 function plotIndividual(inputdata,usemethods)
     
+    %Messsed up struct names, fixed in file name
+    nameCorrect={}
+    
     %pick what dataset to use
     if(exist('inputdata'))
 	switch inputdata
 	case {'PPI' 'ppi'}
 	    loadPPI;
-	    fprintf('using PPI')
+	case {'oldPF','oldgenes', 'PFnogc'}
+	    loadGenes_nogc;
 	case {'PF','genes'}
 	    loadGenes;
 	otherwise
@@ -44,6 +48,7 @@ function plotIndividual(inputdata,usemethods)
     AL=struct;
     for m=1:length(usemethods)
 	alType=usemethods{m};
+	nameCorrect{end+1}=alType;
 	%%%%%%%% LOAD all different random sets
 	list=ls([ResultsFolder '/*' (alType) '.mat']);
 
@@ -55,6 +60,8 @@ function plotIndividual(inputdata,usemethods)
 	   clear temp;
 	   fprintf('loading %s\n',list{f});
 	   temp = load(list{f});
+	   alType=fieldnames(temp);
+	   alType=alType{1};
 
 	   %%%%% see values
 	   %disp('TP');
@@ -120,28 +127,28 @@ function plotIndividual(inputdata,usemethods)
 
 	%%get the minium number of iterterations
 	m=Inf;
-	for b=1:length(AL.(alType).ontrain.batch)
-	    l=length(AL.(alType).ontrain.batch{b});
+	for b=1:length(AL.(alType).ontrain.batch) l=length(AL.(alType).ontrain.batch{b});
 	    if l<m; m = l; end;
 	end
 	AL.(alType).ontrain.minIt = m;
 	if m < minimumIterations; minimumIterations=m; end
     end
 
+    usemethods=fieldnames(AL);
     for m=1:length(usemethods)
 
 	clear A At NumP CumP Precision Recall;
 	alType=usemethods{m};
 	for fold=1:AL.(alType).validationFolds
-	    TP  = AL.(alType).ontrain.TP{fold}(1:AL.(alType).ontrain.minIt);
-	    FP  = AL.(alType).ontrain.FP{fold}(1:AL.(alType).ontrain.minIt);
-	    TN  = AL.(alType).ontrain.TN{fold}(1:AL.(alType).ontrain.minIt);
-	    FN  = AL.(alType).ontrain.FN{fold}(1:AL.(alType).ontrain.minIt);
+	    TP  = AL.(alType).ontrain.TP{fold}(1:minimumIterations);
+	    FP  = AL.(alType).ontrain.FP{fold}(1:minimumIterations);
+	    TN  = AL.(alType).ontrain.TN{fold}(1:minimumIterations);
+	    FN  = AL.(alType).ontrain.FN{fold}(1:minimumIterations);
 
-	    TPt = AL.(alType).ontest.TP{fold}(1:AL.(alType).ontrain.minIt);
-	    FPt = AL.(alType).ontest.FP{fold}(1:AL.(alType).ontrain.minIt);
-	    TNt = AL.(alType).ontest.TN{fold}(1:AL.(alType).ontrain.minIt);
-	    FNt = AL.(alType).ontest.FN{fold}(1:AL.(alType).ontrain.minIt);
+	    TPt = AL.(alType).ontest.TP{fold}(1:minimumIterations);
+	    FPt = AL.(alType).ontest.FP{fold}(1:minimumIterations);
+	    TNt = AL.(alType).ontest.TN{fold}(1:minimumIterations);
+	    FNt = AL.(alType).ontest.FN{fold}(1:minimumIterations);
 
 
 	    A(fold,:)=(TP+TN)./(TP+FP+TN+FN);
@@ -149,7 +156,26 @@ function plotIndividual(inputdata,usemethods)
 	    Precision(fold,:)=(TPt)./(FPt+TPt);
 	    Recall(fold,:)=(TPt)./(FNt+TPt);
 
-	    NumP(fold,:) = AL.(alType).numPos{fold}(1:AL.(alType).ontrain.minIt);
+	    %%if there ar eno positives, make fscore 0
+	    Precision(fold, find(isnan(Precision(fold,:))==1))=0;
+
+	    FScore(fold,:)=2.* Precision(fold,:).*Recall(fold,:) ./ ( Precision(fold,:) + Recall(fold,:) );
+
+	    NumP(fold,:) = AL.(alType).numPos{fold}(1:minimumIterations);
+
+	    %compensate for no cost in field
+	    if(~isfield(AL.(alType),'cost'))
+		fprintf('ERR -- no cost field in %s at fold %i\n',alType,fold);
+		AL.(alType).cost{fold}=zeros(1,minimumIterations);
+	    else 
+	        if(size(AL.(alType).cost,2)<fold)
+		    fprintf('ERR -- no cost for fold %i\n',fold);
+		    AL.(alType).cost{fold}=zeros(1,minimumIterations);
+		end
+	    end
+
+	    %size(AL.(alType).cost{fold})
+	    Cost(fold,:) = AL.(alType).cost{fold}(1:minimumIterations);
 
 	    totalPos=length(find(genes.labels(AL.(alType).training{fold})==1));
 	    for i=1:length(NumP)
@@ -164,57 +190,95 @@ function plotIndividual(inputdata,usemethods)
 	   sum(At)./AL.(alType).validationFolds
 	   sum(Precision)./AL.(alType).validationFolds
 	   sum(Recall)./AL.(alType).validationFolds
+	   sum(FScore)./AL.(alType).validationFolds 
+	   sum(Cost)./AL.(alType).validationFolds  ...
 	  ];
 	 
 	halfwaypt=find(Plot{m}(2,:) > .5);
 	if(length(halfwaypt)==0); halfwaypt=[0];end
-	fprintf('%s 1/2-pt\t%i\n',alType,halfwaypt(1));
+	fprintf('%s 1/2-pt\t%.3f\n',alType,halfwaypt(1));
+
+	fprintf('%s $1/2pt\t%.3f\n',alType,sum(Plot{m}(8,1:halfwaypt(1))  ));
+	totalCost=sum(Plot{m}(8,:));
+	fprintf('%s total Cost\t%.3f\n',alType,totalCost);
 
 	%%%%Plots for individual learners
-	%fig=figure;
-	%plot( [1:AL.(alType).ontrain.minIt], Plot{m}, '-s');
-	%xlabel('Iteration'); ylabel('%'); 
+	fig=figure;
+	plot( [1:minimumIterations], Plot{m}([1 2 4 7],:), '-s');
+	xlabel('Iteration'); ylabel('%'); 
 	%legend({'+/batch','TP:Total', 'Train Accuracy','Test Accuracy' 'Precision' 'Recall'}, ...
-	%      'Location', 'EastOutside');
-	%title([inputdata ' - ' AL.(alType).title ' - Batch Size ' num2str(AL.(alType).BatchSize) ...
-	%       '- ' num2str(AL.(alType).validationFolds) ' Folds']);
+	legend({'+/batch' 'TP:Total' 'Test Accuracy' 'FScore'}, ...
+	      'Location', 'EastOutside');
+	title([inputdata ' - ' AL.(alType).title ' - Batch Size ' num2str(AL.(alType).BatchSize) ...
+	       '- ' num2str(AL.(alType).validationFolds) ' Folds']);
+        
+	hgexport(fig,['img/' ResultsFolder '-' AL.(alType).imgfile])
 
-	%hgexport(fig,['img/' ResultsFolder '-' AL.(alType).imgfile])
+
 
     end
 
     %allocate for interesting plots
-    NumP = zeros(length(usemethods),minimumIterations);
-    CumP = NumP;
-    At   = NumP;
+    NumP   = zeros(length(usemethods),minimumIterations);
+    CumP   = NumP;
+    At     = NumP;
+    Cost   = NumP;
+    FScore = NumP;
     for m=1:length(usemethods)
 	NumP(m,:)=Plot{m}(1,1:minimumIterations);
 	CumP(m,:)=Plot{m}(2,1:minimumIterations);
 	At(m,:)=Plot{m}(4,1:minimumIterations);
+	FScore(m,:)=Plot{m}(7,1:minimumIterations);
+	Cost(m,:)=Plot{m}(8,1:minimumIterations);
     end
-    NumP    %vaerge number of postives in each batch
+
+    %NumP    %vaerge number of postives in each batch
     %Plot{1} %average % of postives in each batch
+
+    %NumP(:,1:5)
+    %At(:,1:5)
+    %usemethods'
+    %return
+
+    set(0,'DefaultAxesLineStyleOrder','-|--|:')
 
     fig=figure;
     plot([1:minimumIterations],NumP)
     title('+/Batch');
     xlabel('Instances Seen'); ylabel('%'); 
-    legend(usemethods,'Location', 'EastOutside');
+    legend(nameCorrect,'Location', 'EastOutside');
     hgexport(fig,['img/' ResultsFolder '-PosPerBatch']);
 
     fig=figure;
     plot([1:minimumIterations],CumP)
     title('Cumulative +');
     xlabel('Instances Seen'); ylabel(''); 
-    legend(usemethods,'Location', 'EastOutside');
+    legend(nameCorrect,'Location', 'EastOutside');
     hgexport(fig,['img/' ResultsFolder '-Cumulative']);
 
     fig=figure;
     plot([1:minimumIterations],At)
     title('Test Accuracy');
     xlabel('Instances Seen'); ylabel(''); 
-    legend(usemethods,'Location', 'EastOutside');
+    legend(nameCorrect,'Location', 'EastOutside');
     hgexport(fig,['img/' ResultsFolder '-testAccuracies']);
+
+    fig=figure;
+    plot([1:minimumIterations],FScore)
+    title('Test F-score');
+    xlabel('Instances Seen'); ylabel(''); 
+    legend(nameCorrect,'Location', 'EastOutside');
+    hgexport(fig,['img/' ResultsFolder '-testAccuracies']);
+    %no cost in PPI
+    if(~strcmp(ResultsFolder,'PPIResults'))
+	fig=figure;
+	plot([1:minimumIterations],Cost)
+	title('Cost');
+	ylabel('$');
+	xlabel('Instances Seen'); ylabel(''); 
+	legend(usemethods,'Location', 'EastOutside');
+	hgexport(fig,['img/' ResultsFolder '-cost']);
+    end
 
 
 end
