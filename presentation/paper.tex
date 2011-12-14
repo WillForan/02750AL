@@ -11,6 +11,7 @@
 \usepackage{epstopdf}
 \usepackage{multicol} 
 \usepackage{cite}
+\usepackage{hyperref}
 \pagestyle{myheadings}
 \markright{\name}
 %\thispagestyle{empty}
@@ -31,9 +32,9 @@ In this study, a positive label corresponds to a protein that is expressed at di
 The methods used to select the next batch are tested for consistancy against the Qi et al dataset. Both sets share the same percent of positive lables, though they differ in overall size and predicability.
 
 \section{Data}
-Data is collected from PlasmoDB \cite{plasmodb}. The model uses the number of exons , the molecular weight, the isoelectric point, the number of trans-membrane domains, ortholog and paralog counts, small nucleotide polymorphism information, GC content, and length. A binary label is given for a significant maximum fold induction (greater than 9) observed through highly synchronized multistage  mRNA-Seq experiments\cite{llinas}. Just over 30\% of the 5417 instances are labeled as differentially expressed.
+Data is collected from PlasmoDB \cite{plasmodb}. The model uses the number of exons, the molecular weight, the isoelectric point, the number of trans-membrane domains, ortholog and paralog counts, small nucleotide polymorphism information, GC content, and length. A binary label is given for a significant maximum fold induction (greater than 9) observed through highly synchronized multistage  mRNA-Seq experiments\cite{llinas}. Just over 30\% of the 5417 instances are labeled as differentially expressed.
 
-A second ready-to-use dataset provided by Qi et al\cite{qi} identifies physically interacting yeast proteins. The known positive set includes 2865 pairs. A random subset of the noninteracting pairs was chosen so that, similar to the other dataset, the total number of postitive instances is 30\% of the total. This set includes 161 features, over 10 times as many as the Plasmodium set. The classifiers do much better on this set.
+A second ready-to-use dataset provided by Qi et al\cite{qi} identifies physically interacting yeast proteins (PPI). The known positive set includes 2865 pairs. A random subset of the noninteracting pairs was chosen so that, similar to the other dataset, the total number of postitive instances is 30\% of the total. This set includes 161 features, over 10 times as many as the Plasmodium (PF) set. The classifiers do much better on this set.
 
 \section{Models}
 A random forest classifier\cite{rf} was the primary model for training and classifying instances in this study. The model was trained on 30 trees and was given, depending on the fold size, 14 or 15 iterations where the batch size of each iteration was roughly equal: $\approx 300$ instances/batch in the P. falciparum dataset and $\approx 500$ instances/batch in the yeast PPI set.
@@ -123,7 +124,7 @@ SMORND&	8&	8&	2147.13\\
 \end{small}
 \end{centering}
 
-Least Positive Votes does slightly better than Entropy at selecting positive instances on the PF set and performs almost identically in the PPI set. Both reach the halfway point quickest, and most methods do better than random. MIP extensions do not help Confusion or Entropy in the PF set, but does help Confusion gather more positive instances than Confusion by itself. This is more true for the PPI set.(Figure \ref{PPI}) On PF  Confusion does not do well. (Figure \ref{PF}) The MIP extension hurts entropy more on the PPI set.
+Least Positive Votes does slightly better than Entropy at selecting positive instances on the PF set and performs almost identically in the PPI set. Both reach the halfway point quickest, and most methods do better than random. MIP extensions do not help Confusion or Entropy in the PF set, but does help Confusion gather more positive instances than Confusion by itself. This is more true for the PPI set.(Figure~\ref{PPI}) On PF, Confusion does not do well. (Figure~\ref{PF}) The MIP extension hurts entropy more on the PPI set.
  
  The difference in methods accumulation of positive instances is much greater for the PPI set than for the PF set.
 
@@ -134,17 +135,18 @@ Least Positive Votes does slightly better than Entropy at selecting positive ins
 
 %Total cost $= 4019.02$ varies as a result of fold
  \section{Conclusion}
-Active learning is offers improvement over both random and cheaps first initial solutions. Greedily selecting the cheapest experiments is the most expensive way to acquire the first half of the positive instances. Though, optimizing for cost saves less than \$10, a 100^{th} of the cost, it is clear from the failure of RFCheap that positive instances are not overwhelmingly cheap. The single minded cost selector did not reach the halfway point after seeing half the data, and did worse than random. Yet, the best positive selecting methods were also the cheapest. Because these methods were based on uncertainty, it is likely the positive instances that are closest to negative instances are also the cheapest positive instances (longer, GC rich). 
+Active learning is offers improvement over both random and cheap initial solutions. Greedily selecting the cheapest experiments is the most expensive way to acquire the first half of the positive instances. Though, optimizing for cost saves less than \$10, a 100$^{th}$ of the cost, it is clear from the failure of RFCheap that positive instances are not overwhelmingly cheap. The single minded cost selector did not reach the halfway point after seeing half the data, and did worse than random. Yet, the best positive selecting methods were also the cheapest. Because these methods were based on uncertainty, it is likely the positive instances that are closest to negative instances are also the cheapest positive instances (longer, GC rich). 
 
 
  The history method's poorer performance with and without MIP on PF suggests uncertainty between models is not dynamic enough for history to be relevant,where as, on the PPI dataset, history is useful.
  %WHY?
 
- The initial and consistent dip taken by confusion in the first few steps is a result of the Entropy selector acting on random forest trained from the KMeans initial selection. This results in a large selection of positive instances (\ref{pf} +/Batch), but a poorly trained model (\ref{pf} accuracy). Because of the history of the model, it takes some time to recover.
+ The initial and consistent dip taken by Confusion in the first few steps is a result of the Entropy selector acting on random forest trained from the KMeans initial selection. This results in a large selection of positive instances (Figure~\ref{PF} +/Batch), but a poorly trained model (Figure~\ref{PF} accuracy). Because history is counted in the model, recovery takes some time.
  %Given its simplicity, least vote and least positive vote do surprisingly.
   \section{Notes}
 The hypothetical experiment could be extended to include two or more sources including another RNA-seq experiment and SAGE data. The different experiment types offer an opportunity to give source a different cost and probability of being correct. When the genome is better annotated, or perhaps in another organisms all together, it will be possible to assign realistic probabilities and weights to these factors.
 
+The code that generate the figures is online. \url{https://github.com/WillForan/02750AL/}. There is an object framework for adding selection methods in matlab.
 \begin{figure}[p]
 \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-Cheapest}
 \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-LVC} \\

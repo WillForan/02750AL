@@ -1,4 +1,4 @@
-﻿<[autotemplate]
+<[autotemplate]
 documentclass={beamer}
 usepackage={listings}
 usepackage={wasysym}
@@ -9,7 +9,6 @@ lstdefinestyle={basic}{....}
 titleframe=False
 usetheme={Amsterdam}
 [autotemplate]>
-
 
 == Intro ==
 === Intro ===
@@ -195,12 +194,13 @@ Total cost $= 4019.02$
 == Conclusion ==
 === ===
 ==== ====
+* History after doing well is not necessarily good
 * Least Vote does surprisingly well
 * Choosing solely based on cost is costly (to 1/2 way +)
 * Optimizing for cost saves \$10
-==== Could have done ====
+==== Notes ====
+* \url{https://github.com/WillForan/02750AL/}
 * Two sources
-** no metric for choosing correct
 * Instance selection
 
 === Citations ===
