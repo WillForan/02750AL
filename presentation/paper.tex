@@ -1,0 +1,177 @@
+\def \PSName {Most Informative Positive Learning with History Based Uncertainty and Cost}
+\def \name {Will Foran $\cdot$ wforan1 }
+\documentclass[10pt,a4pape r]{article}
+%\usepackage[top=1in,left=.2in,bottom=.1in]{geometry}
+\usepackage[]{geometry}
+\usepackage[latin1]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx} 
+\usepackage{epstopdf}
+\usepackage{multicol} 
+\usepackage{cite}
+\pagestyle{myheadings}
+\markright{\name}
+%\thispagestyle{empty}
+\begin{document}
+\begin{center}\Large \bfseries \PSName \end{center}
+
+
+\section{Background}
+An artificial problem with an arbitrary cost scheme was created for iterative selection of experiments in what is actually a single RNA deep sequencing experiment provided by Otto et al \cite{llinas} through PlasmoDB \cite{plasmodb}.  The objective is to demonstrate the capability of active learning in minimizing the number of labels sought while maximizing the acquisition of positive instances. In this case, a positive instance corresponds to a protein that is differentially expressed across the blood stages of Plasmodium falciparum.
+
+Each year, Plasmodium falciparum malaria is responsible for more than a million deaths, mostly in children. The parasite's genome was sequenced in 2002, but is not fully annotated.\cite{llinas}. Genomics are complicated by the organisms high AT/low GC content. 
+
+In addition to the Plasmodium falciparum dataset, the active selection methods are also tested on protein-protein interation data provided by Qi et al\cite{qi}.
+
+\section{Experiment}
+In this study, a positive label corresponds to a protein that is expressed at different levels of the three blood stages of Plasmodium falciparum. The objective is to label a majority of these genes with few iterations. Experiments can be done in a batch with many labels being acquired at one time.  Each batch has a cost associated with the GC content and length of the genes with sought labels. 
+
+The methods used to select the next batch are tested for consistancy against the Qi et al dataset. Both sets share the same percent of positive lables, though they differ in overall size and predicability.
+
+\section{Data}
+Data is collected from PlasmoDB \cite{plasmodb}. The model uses the number of exons , the molecular weight, the isoelectric point, the number of trans-membrane domains, ortholog and paralog counts, small nucleotide polymorphism information, GC content, and length. A binary label is given for a significant maximum fold induction (greater than 9) observed through highly synchronized multistage  mRNA-Seq experiments\cite{llinas}. Just over 30\% of the 5417 instances are labeled as differentially expressed.
+
+A second ready-to-use dataset provided by Qi et al\cite{qi} identifies physically interacting yeast proteins. The known positive set includes 2865 pairs. A random subset of the noninteracting pairs was chosen so that, similar to the other dataset, the total number of postitive instances is 30\% of the total. This set includes 161 features, over 10 times as many as the Plasmodium set. The classifiers do much better on this set.
+
+\section{Models}
+A random forest classifier\cite{rf} was the primary model for training and classifying instances in this study. The model was trained on 30 trees and was given, depending on the fold size, 14 or 15 iterations where the batch size of each iteration was roughly equal: $\approx 300$ instances/batch in the P. falciparum dataset and $\approx 500$ instances/batch in the yeast PPI set.
+
+An SVM classifier was also used, but preformed poorly both in terms of accuracy and time to train.  
+
+The models statistics are the average of 5 runs of 5 fold cross validation.
+
+\section{Selection}
+\subsection{Initialization}
+Two methods were used for the initial batch selection: K-Means and random selection. K-Means was allowed 4 clusters. With more clusters, one was emptied at the first iteration. In addition to initializing selection so another method could be used, both K-Means and random selection were also allowed to run as the only selection method. \\
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-RND} \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-RF-RND}
+
+K-Means selection criteria is the same as presented in Mohamed et al \cite{mohamed}. The size of the selection per cluster is scaled by the size of that cluster. That is, the batch size, $S = \sum_{i=1}^{K} s_{i}$, the number of clusters, $K(=4)$, number yet classified, $N$, and the number available in the cluster, $n_i$, determine the number that will be selected.  $s_i = S * \frac{n_i}{N}$. The closest points to the center were chosen.\\
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-KM} \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-RF-KM}
+
+\subsection{Uncertainty}
+Two other models were reconstructed from Mohamed et al: uncertainty (entropy) and history with uncertainty. Entropy was implemented by taking the vote count of trees for a label, $c_i$, by the total $c_t$. $E = -\sum_{i\in 0,1}(\frac{c_i}{c_t}\log(\frac{c_i}{c_t}))$. \\
+
+ \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-E} \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-RF-E}
+
+ History based uncertainty uses Confusion$(x) = \sum_{i=1}^{3}\sum_{j=(0,1)} p_{ij}\log(\frac{p_{ij}}{p_{Aj}})$ were $P_{Aj}$ is the average for the label $j$ and $i$ is the model at time $i$ in the three stored histories.  Because the selection model requires three models already exist, it cannot be used on the first 3 iterations. For this reason, K-Means and then uncertainty are used to get to the 3rd iteration.\\
+ \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-Confusion} \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-RF-Confusion}
+
+
+\subsection{MIP}
+The Most Informative Positive selection as described by Danziger et al\cite{danziger} was used to augment the previous models. Here selection criteria were modified to ensuring all predicted positives (differentially expressed genes, interacting proteins) are chosen above predicted negatives (constant genes, noninteracting pairs). This is accomplished by adding the largest positive value to all positive values when taking the largest score to select instances for the next batch.
+\[ scoreMIP(m) = score(m) +w \]
+\[ w = \left\{ \begin{array}{lr}
+      \text{constant} > max_{x}(score(x)) &: h(m)= \text{Positive} \\
+      0  &: h(m)= \text{Negative} \\
+\end{array} \right.
+ \]
+
+ \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-EntropyMIP} \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-RF-EntropyMIP} \\
+
+ \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-ConfusionMIP} \includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-RF-ConfusionMIP}\\
+
+\subsection{Simpler Uncertainty}
+\subsection{Least Votes}
+In addition to entropy, a simpler comparison of tree votes was used as an alternative uncertainty. Here instances with trees most in disagreement were chosen by minimizing the absolute value of the difference in tree votes.  That is, when $p_i$ is the number of tress classifying as positive and $n_i$ the number negative, $s_j=\min_{\forall i}(\vert p_i-n_i\vert)$ is repeated from $j=1$ to $j=$the batch size to build the selected instances of the batch $s_i$.
+%Total cost $= 4019.02$
+
+Removing the absolute value provides a simple way to implement a MIP alternative. Least Positive Vote picks instances with more trees favoring differentially expression before ever trying other instances. In both datasets, this gets to the half way point first.
+
+ \includegraphics[keepaspectratio,width=.5\textwidth]{../matlab/img/GeneResults-RF-LPV} \includegraphics[keepaspectratio,width=.5\textwidth]{../matlab/img/PPIResults-RF-LPV}
+
+\section{Cost}
+In the hypothetical test for differential expression, a cost can be imagined for acquiring a label. One scheme for charging a cost is based on GC richness and length. It is assumed longer GC rich sequences are more stable and so cheaper to experiment on. With this in mind, a cost function is designed to charge less for long GC rich nucleotide sequences of a gene, and more for short AT rich sequences. The function is the reciprocal of the sum of these values divided by their average.
+\[ C = \big(\frac{\text{length}}{\text{average length}} + \frac{\text{GC}}{\text{average GC}}\big)^{-1} \]
+
+Given a cost, it is then possible to design a selection algorithm to optimize what is spent to get half the positive instances. The most naive of these is to always choose the cheapest instances. This model (RFCheap) does poorly.
+
+\subsection{Cheapest Vote and Cheapest Least Vote}
+A better method is to build on the simple vote difference model. Instead of always picking the least certain instance, the method will check if there are similarly uncertain instances that will lower the overall cost instead.
+\begin{enumerate}
+ \item Sort $\vert$  vote difference $\vert$
+ \item create a set of all instances one standard deviation of vote difference outside the initial batch set
+ \item While these instances exist and have a cost less than the max of initial set
+ \begin{enumerate}
+  \item remove max of initial
+  \item replace with min of outside set
+  \item remove min from outside set
+  \end{enumerate}
+\end{enumerate}
+
+Removing the absolute value results in a MIP selection method like before. However, this method does not improve upon it's parent as it does when cost insensitive. \\ 
+
+\section{Results}
+ \begin{centering}
+\begin{small}
+\begin{tabular}{l|rrr}
+Selection Method&	PPI 1/2+&	1/2+ batch&	1/2+ Cost\\\hline
+RFCheap&	-&	9&	2177.05\\
+RFConfusion &	7&	8&	2156.78\\
+RFConfusionMIP&	6&	7&	1908.92\\
+\textbf{RFEntropy}&	\textbf{4}&	\textbf{6}&	\em{1668.43}\\
+RFEntropyMIP&	7&	7&	1941.15\\
+RFKMeans&	10&	9&	2359.53\\
+\textbf{RFLeastPositiveVotes}&	\textbf{4}&	\textbf{6}&	1672.60\\
+RFLeastVotes&	5&	\textbf{6}&	1672.91\\
+RFLeastVotesCheap&	-&	\textbf{6}&	\textbf{1654.70}\\
+RFLeastPositiveVotesCheap&	-&	\textbf{6}&	1679.52\\
+RFRandom&	8&	8&	2147.13\\
+SMORND&	8&	8&	2147.13\\  
+\end{tabular} 
+\end{small}
+\end{centering}
+
+Least Positive Votes does slightly better than Entropy at selecting positive instances on the PF set and performs almost identically in the PPI set. Both reach the halfway point quickest, and most methods do better than random. MIP extensions do not help Confusion or Entropy in the PF set, but does help Confusion gather more positive instances than Confusion by itself. This is more true for the PPI set.(Figure \ref{PPI}) On PF  Confusion does not do well. (Figure \ref{PF}) The MIP extension hurts entropy more on the PPI set.
+ 
+ The difference in methods accumulation of positive instances is much greater for the PPI set than for the PF set.
+
+ Accuracy varies little on the held out test set in both models. In both datasets, Confusion with and without the MIP adjustment have a characteristic large dip in accuracy. It takes much longer to recover from this in the PF set, and in both cases the effect is worse with MIP enabled.
+ 
+ While this dip is also visible in the F-score on the PPI set, on the PF dataset the dip is a spike. Confusion aside, all other selection methods' F-score trend upward.
+
+
+%Total cost $= 4019.02$ varies as a result of fold
+ \section{Conclusion}
+Active learning is offers improvement over both random and cheaps first initial solutions. Greedily selecting the cheapest experiments is the most expensive way to acquire the first half of the positive instances. Though, optimizing for cost saves less than \$10, a 100^{th} of the cost, it is clear from the failure of RFCheap that positive instances are not overwhelmingly cheap. The single minded cost selector did not reach the halfway point after seeing half the data, and did worse than random. Yet, the best positive selecting methods were also the cheapest. Because these methods were based on uncertainty, it is likely the positive instances that are closest to negative instances are also the cheapest positive instances (longer, GC rich). 
+
+
+ The history method's poorer performance with and without MIP on PF suggests uncertainty between models is not dynamic enough for history to be relevant,where as, on the PPI dataset, history is useful.
+ %WHY?
+
+ The initial and consistent dip taken by confusion in the first few steps is a result of the Entropy selector acting on random forest trained from the KMeans initial selection. This results in a large selection of positive instances (\ref{pf} +/Batch), but a poorly trained model (\ref{pf} accuracy). Because of the history of the model, it takes some time to recover.
+ %Given its simplicity, least vote and least positive vote do surprisingly.
+  \section{Notes}
+The hypothetical experiment could be extended to include two or more sources including another RNA-seq experiment and SAGE data. The different experiment types offer an opportunity to give source a different cost and probability of being correct. When the genome is better annotated, or perhaps in another organisms all together, it will be possible to assign realistic probabilities and weights to these factors.
+
+\begin{figure}[p]
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-Cheapest}
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-RF-LVC} \\
+\caption{Naive Cheapest and Least Vote Cheapest}
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/cost_graph} 
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/cost_hist} \\
+\caption{Visual description of cost function: indexes ordered by cost; histogram of binned costs}
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-cost}
+\caption{\label{Cost}The cost per batch of each instance for each selection method}
+\end{figure}
+\begin{figure}[p]
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-testAccuracies}
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-PosPerBatch}\\
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-Cumulative}
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/GeneResults-testFScore}
+\caption{\label{PF}PF: test accuracy and F-measure, per batch and cumulative positive instances}
+\end{figure}
+\begin{figure}[p]
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-testAccuracies}
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-PosPerBatch} \\
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-Cumulative}
+\includegraphics[keepaspectratio,width=.45\textwidth]{../matlab/img/PPIResults-testFScore}
+\caption{\label{PPI}PPI: test accuracy and F-measure, per batch and cumulative positive instances}
+\end{figure}
+
+
+\bibliography{bib}{}
+\bibliographystyle{plain}
+\end{document}
+\end{document}

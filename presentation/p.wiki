@@ -1,0 +1,227 @@
+﻿<[autotemplate]
+documentclass={beamer}
+usepackage={listings}
+usepackage={wasysym}
+usepackage={graphicx}
+title={Most Informative Positive Learning with History Based Uncertainty and Cost }
+date={\today}
+lstdefinestyle={basic}{....}
+titleframe=False
+usetheme={Amsterdam}
+[autotemplate]>
+
+
+== Intro ==
+=== Intro ===
+==== Most Informative Positive Learning with History Based Uncertainty and Cost ====
+==== Plasmodium ====
+* Plasmodium falciparum malaria --> $> 1$ million deaths annually. 
+** mostly in children
+* Widespread drug-resistance
+* Sequenced in 2002
+** High AT
+** Annotations still not robust
+==== Motivation ====
+* Improve annotations
+* Find differentially expressed genes
+** Identify protein targets
+* Save dying children
+
+==== The Con ====
+* Deep Sequencing doesn't exist
+* Protein stage expression evaluated individually (or in smaller batches)
+
+== Data ==
+=== PF ===
+==== Features ====
+* Exons
+* Molecular Weight
+* Isoelectric Point
+* TM Domains
+* Ortholog count
+* Paralog count
+* Total SNPs 
+* non-synonymous SNPs
+* Synonymous SNPs
+* GC content
+* Length
+
+==== Labels ====
+* Differential expression set as binary
+** if max fold induction $>$ 9
+* 31.25\% Differentially expressed
+
+=== Yeast/PPI ===
+==== Yeast/PPI ====
+* Pre-made phyInteract set from Qi et al.
+** 161 features
+* 2865/9550 interacting pairs (30\%)
+** randomly selected 6685 non-interaction pairs, use all positive
+
+
+== Algorithms ==
+=== General ===
+==== Learner ====
+* Random Forest
+** 30 trees
+* SVM
+** Gaussian Radial Basis Function kernel
+
+====  Instance Selection ====
+* 14 batches
+** $\approx 300$ instances/batch (PF)
+** $\approx 500$ instances/batch (PPI)
+
+==== Initial Selection ====
+* Random
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/GeneResults-RF-RND}
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/PPIResults-RF-RND}
+
+==== Initial Selection ====
+* Kmeans
+** $S = \sum_{i=1}^{K} s_{i}$ --  batch size
+** $K$  Num. clusters (4)
+** $s_i = S * \frac{n_i}{N}$ -- selected from cluster;
+** $n_i$ -- number in cluster yet classified 
+** $N$ -- number yet classified
+(Mohamed et al)
+
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/GeneResults-RF-KM}
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/PPIResults-RF-KM}
+
+=== Selectors ===
+==== Entropy ====
+* $- \displaystyle\sum_{i}^{\text{available instances}} p_{i} \dot \log(p_{i}) + n_{i} \dot \log(n_{i})$ 
+** $p_i$ -- trees classifying positive
+** $n_i$ -- trees classifying negative
+ (Mohamed et al.)
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/GeneResults-RF-E}
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/PPIResults-RF-E}
+
+==== Confusion ====
+* Confusion$(x) = \sum_{i=1}^{3}\sum_{j=(0,1)} p_{ij}\log(\frac{p_{ij}}{p{Aj}})$
+* first 3 iterations must be built (using  entropy and  kmeans)
+ (Mohamed et al.)
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/GeneResults-RF-Confusion}
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/PPIResults-RF-Confusion}
+
+==== MIP ====
+\[ scoreMIP(m) = score(m) +w \]
+\[ w = \left\{ \begin{array}{lr}
+      \text{constant} > max_{x}(score(x)) &: h(m)= \text{Positive} \\
+      0  &: h(m)= \text{Negative} \\
+\end{array} \right.
+ \]
+
+
+(Danziger)
+
+==== MIP ====
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/GeneResults-RF-EntropyMIP}
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/PPIResults-RF-EntropyMIP}
+
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/GeneResults-RF-ConfusionMIP}
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/PPIResults-RF-ConfusionMIP}
+==== Least Votes ====
+* On Random Forest trained model
+* Pick the next instance for instances with uncertain votes
+* '''Least Positive Vote''' -- pick instances with more trees favoring diff. expressed.
+
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/GeneResults-RF-LPV}
+ \includegraphics[keepaspectratio,height=.5\textheight]{../matlab/img/PPIResults-RF-LPV}
+
+== Results ==
+==== 1/2 point ====
+\begin{small}
+\begin{tabular}{l|rrr}
+Selection Method&	PPI 1/2+&	1/2+ batch&	1/2+ Cost\\\hline
+RFCheap&	-&	9&	2177.05\\
+RFConfusion &	7&	8&	2156.78\\
+RFConfusionMIP&	6&	7&	1908.92\\
+RFEntropy&	'''4'''&	'''6'''&	1668.43\\
+RFEntropyMIP&	7&	7&	1941.15\\
+RFKMeans&	10&	9&	2359.53\\
+'''RFLeastPositiveVotes'''&	'''4'''&	'''6'''&	1672.60\\
+RFLeastVotes&	5&	'''6'''&	1672.91\\
+RFLeastVotesCheap&	-&	'''6'''&	'''1654.70'''\\
+RFLeastPositiveVotesCheap&	-&	'''6'''&	1679.52\\
+RFRandom&	8&	8&	2147.13\\
+SMORND&	8&	8&	2147.13\\  
+\end{tabular}
+\end{small}
+
+\begin{small}
+Total cost $= 4019.02$
+\end{small}
+=== PF ===
+==== ====
+\includegraphics[keepaspectratio,width=\textwidth]{../matlab/img/GeneResults-testAccuracies}
+==== ====
+\includegraphics[keepaspectratio,width=\textwidth]{../matlab/img/GeneResults-PosPerBatch}
+==== ====
+\includegraphics[keepaspectratio,width=\textwidth]{../matlab/img/GeneResults-Cumulative}
+=== PPI ===
+==== ====
+\includegraphics[keepaspectratio,height=\textheight]{../matlab/img/PPIResults-testAccuracies}
+==== ====
+\includegraphics[keepaspectratio,height=\textheight]{../matlab/img/PPIResults-PosPerBatch}
+==== ====
+\includegraphics[keepaspectratio,height=\textheight]{../matlab/img/PPIResults-Cumulative}
+=== Cost ===
+==== Cost ==== 
+* In the hypothetical test for differential expression:
+** GC rich sequences are cheaper
+** Longer sequences cause less error (and are cheaper)
+\[ C = \big(\frac{\text{length}}{\text{average length}} + \frac{\text{GC}}{\text{average GC}}\big)^{-1} \]
+==== Cost ==== 
+\includegraphics[keepaspectratio,width=.5\textwidth]{../matlab/img/cost_graph} \includegraphics[keepaspectratio,width=.5\textwidth]{../matlab/img/cost_hist}
+
+==== ====
+\includegraphics[keepaspectratio,width=\textwidth]{../matlab/img/GeneResults-cost}
+==== ====
+\includegraphics[keepaspectratio,width=\textwidth]{../matlab/img/GeneResults-RF-Cheapest}
+==== Cheapest Vote ====
+# Sort abs. vote difference
+# create a set of all instances one std outside the initial batch set
+# While these instances have cost $<$ max of initial set
+## remove max of initial
+## replace with min of outside set
+## remove min from outside set
+==== Least Vote Cheapest ====
+\includegraphics[keepaspectratio,width=\textwidth]{../matlab/img/GeneResults-RF-LVC}
+
+* 1/2 \@ instance 6
+* costs \$1654.71
+== Conclusion ==
+=== ===
+==== ====
+* Least Vote does surprisingly well
+* Choosing solely based on cost is costly (to 1/2 way +)
+* Optimizing for cost saves \$10
+==== Could have done ====
+* Two sources
+** no metric for choosing correct
+* Instance selection
+
+=== Citations ===
+==== Citations ====
+* Active learning for human protein-protein interaction prediction
+** Thahir P Mohamed, Jaime G Carbonell and Madhavi K Ganapathiraju
+
+* Predicting Positive p53 Cancer Rescue Regions Using Most Informative Positive (MIP) Active Learning
+** Samuel A. Danziger, Roberta Baronio, Lydia Ho, Linda Hall, Kirsty Salmon, G. Wesley Hatfield, Peter Kaiser, Richard H. Lathrop
+
+* New insights into the blood-stage transcriptome of Plasmodium falciparum using RNA-Seq
+** Thomas D. Otto, Daniel Wilinski, Sammy Assefa, Thomas M. Keane, Louis R. Sarry, Ulrike Böhme, Jacob Lemieux, Bart Barrell, Arnab Pain, Matthew Berriman, Chris Newbold, Manuel Llinás,
+
+==== Citations ====
+* PlasmoDB: a functional genomic database for malaria parasites.
+** C. Aurrecoechea, J. Brestelli, B. P. Brunk, J. Dommer, S. Fischer, B. Gajria, X. Gao, A. Gingle, G. Grant, O. S. Harb, M. Heiges, F. Innamorato, J. Iodice, J. C. Kissinger, E. Kraemer, W. Li, J. A. Miller, V. Nayak, C. Pennington, D. F. Pinney, D. S. Roos, C. Ross, C. J. Stoeckert, C. Treatman, H. Wang
+
+* Random forest similarity for protein-protein interaction prediction from multiple sources. 
+** Qi Y, Klein-Seetharaman J, Bar-Joseph Z
+
+* randomforest-matlab (http://code.google.com/p/randomforest-matlab/)
+** Abhishek Jaiantilal 
+
+

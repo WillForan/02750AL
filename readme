@@ -1,3 +1,5 @@
+matlab/run.sh
+-- will run on PPI and PF once created (5 times 5 fold cross validation)
 
 plasDB/formatData.sh 
      --> labeled.csv   (with Gene IDs)
@@ -11,6 +13,13 @@ matlab/generateMAT.m
 	structure
     	genes.{labels,feats,featnames,names}
 
+matlab/runAL.m
+    runAL({'RFRandom' ....},'PF',i)
+    * last two inputs optional
+
+matlab/plotAL.m
+    plotAL('PF',{'RFRandom' ....})
+    * last input optional
    
 
 wekaShortcuts.sh
